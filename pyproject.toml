@@ -19,7 +19,8 @@ classifiers = [
     "Topic :: Text Processing",
     "Topic :: Text Processing :: Linguistic",
 ]
-include = ["base_config.json"]
+include = ["base_config.json", "deduce/data/**/*"]
+packages = [{include = "deduce"}]
 
 [tool.sphinx]
 author = "Vincent Menger"

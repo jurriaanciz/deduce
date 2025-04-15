@@ -1,6 +1,7 @@
 """Loads Deduce and all its components."""
 
 import importlib.metadata
+import importlib.resources
 import itertools
 import json
 import logging
@@ -27,9 +28,9 @@ from deduce.tokenizer import DeduceTokenizer
 __version__ = importlib.metadata.version(__package__ or __name__)
 
 
-_BASE_PATH = Path(os.path.dirname(__file__)).parent
-_LOOKUP_LIST_PATH = _BASE_PATH / "deduce" / "data" / "lookup"
-_BASE_CONFIG_FILE = _BASE_PATH / "base_config.json"
+_BASE_PATH = Path(os.path.dirname(__file__))
+_LOOKUP_LIST_PATH = _BASE_PATH / "data" / "lookup"
+_BASE_CONFIG_FILE = _BASE_PATH.parent / "base_config.json"
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -109,10 +110,41 @@ class Deduce(dd.DocDeid):  # pylint: disable=R0903
         config: dict[str, Any] = {}
 
         if load_base_config:
-            with open(_BASE_CONFIG_FILE, "r", encoding="utf-8") as file:
-                base_config = json.load(file)
-
-            utils.overwrite_dict(config, base_config)
+            # Try multiple locations for the base config file
+            config_paths = [
+                _BASE_CONFIG_FILE,  # Original location
+                Path(__file__).parent / "base_config.json",  # Same directory as module
+                Path(__file__).parent.parent / "base_config.json"  # Parent directory
+            ]
+            
+            config_loaded = False
+            for config_path in config_paths:
+                if config_path.exists():
+                    with open(config_path, "r", encoding="utf-8") as file:
+                        base_config = json.load(file)
+                    utils.overwrite_dict(config, base_config)
+                    config_loaded = True
+                    break
+                    
+            if not config_loaded:
+                # Fallback: look for the file in the package resources
+                try:
+                    from importlib.resources import files
+                    config_text = files('deduce').joinpath('base_config.json').read_text(encoding='utf-8')
+                    base_config = json.loads(config_text)
+                    utils.overwrite_dict(config, base_config)
+                except (ImportError, FileNotFoundError):
+                    # For older Python versions or if resource not found
+                    try:
+                        import pkg_resources
+                        config_text = pkg_resources.resource_string('deduce', 'base_config.json').decode('utf-8')
+                        base_config = json.loads(config_text)
+                        utils.overwrite_dict(config, base_config)
+                    except (ImportError, FileNotFoundError):
+                        raise FileNotFoundError(
+                            "Could not find base_config.json in any expected location. "
+                            "Please provide a config file using the config parameter."
+                        )
 
         if user_config is not None:
             if isinstance(user_config, str):
