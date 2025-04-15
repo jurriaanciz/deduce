@@ -30,7 +30,7 @@ __version__ = importlib.metadata.version(__package__ or __name__)
 
 _BASE_PATH = Path(os.path.dirname(__file__))
 _LOOKUP_LIST_PATH = _BASE_PATH / "data" / "lookup"
-_BASE_CONFIG_FILE = _BASE_PATH.parent / "base_config.json"
+_BASE_CONFIG_FILE = _BASE_PATH / "base_config.json"  # Look in the deduce module directory first
 
 
 logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
@@ -112,9 +112,9 @@ class Deduce(dd.DocDeid):  # pylint: disable=R0903
         if load_base_config:
             # Try multiple locations for the base config file
             config_paths = [
-                _BASE_CONFIG_FILE,  # Original location
-                Path(__file__).parent / "base_config.json",  # Same directory as module
-                Path(__file__).parent.parent / "base_config.json"  # Parent directory
+                _BASE_CONFIG_FILE,  # In the deduce module directory
+                Path(__file__).parent.parent / "base_config.json",  # Package root
+                Path(__file__).with_name("base_config.json"),  # Next to this file
             ]
             
             config_loaded = False
@@ -127,24 +127,10 @@ class Deduce(dd.DocDeid):  # pylint: disable=R0903
                     break
                     
             if not config_loaded:
-                # Fallback: look for the file in the package resources
-                try:
-                    from importlib.resources import files
-                    config_text = files('deduce').joinpath('base_config.json').read_text(encoding='utf-8')
-                    base_config = json.loads(config_text)
-                    utils.overwrite_dict(config, base_config)
-                except (ImportError, FileNotFoundError):
-                    # For older Python versions or if resource not found
-                    try:
-                        import pkg_resources
-                        config_text = pkg_resources.resource_string('deduce', 'base_config.json').decode('utf-8')
-                        base_config = json.loads(config_text)
-                        utils.overwrite_dict(config, base_config)
-                    except (ImportError, FileNotFoundError):
-                        raise FileNotFoundError(
-                            "Could not find base_config.json in any expected location. "
-                            "Please provide a config file using the config parameter."
-                        )
+                # Fallback: use embedded default configuration
+                # Load the configuration from embedded defaults
+                from deduce.default_config import DEFAULT_CONFIG
+                utils.overwrite_dict(config, DEFAULT_CONFIG)
 
         if user_config is not None:
             if isinstance(user_config, str):
